@@ -25,6 +25,7 @@ public abstract class AbstractElasticsearchPublisher<T> implements Runnable {
 
 	private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(1);
 	private static final String MDC_PROPERTY_NAME = "mdc";
+	private static final String ARGS_PROPERTY_NAME = "args";
 	public static final String THREAD_NAME_PREFIX = "es-writer-";
 
 	private volatile List<T> events;
@@ -182,6 +183,8 @@ public abstract class AbstractElasticsearchPublisher<T> implements Runnable {
 
 			if (MDC_PROPERTY_NAME.equalsIgnoreCase(name)) {
 				this.splitMDCFields(event, gen);
+			} else if (ARGS_PROPERTY_NAME.equalsIgnoreCase(name)) {
+				this.writeArgs(event, gen);
 			} else {
 				String value = pae.encode(event);
 				if (pae.allowEmpty() || (value != null && !value.isEmpty())) {
@@ -189,14 +192,38 @@ public abstract class AbstractElasticsearchPublisher<T> implements Runnable {
 				}
 			}
 		}
-
 		gen.writeEndObject();
 	}
+
+	@SuppressWarnings("unchecked")
+	private void writeArgs(T event, JsonGenerator gen) throws IOException {
+		ILoggingEvent logEvent = (ILoggingEvent) event;
+		if (event != null) {
+			Object[] args = logEvent.getArgumentArray();
+			if (args != null) {
+				for (Object object : args) {
+					if (object != null && object instanceof Map) {
+						try {
+							Map map = (Map) object;
+							this.writeMap(map, gen);
+						} catch (ClassCastException ex) {
+							gen.writeStringField("error", ex.getMessage());
+						}
+					}
+				}
+			}
+		}
+	}
+
 
 	private void splitMDCFields(T event, JsonGenerator gen) throws IOException {
 		ILoggingEvent logEvent = (ILoggingEvent) event;
 		Map<String, String> mdcPropertyMap = logEvent.getMDCPropertyMap();
-		for (Map.Entry<String, String> entry : mdcPropertyMap.entrySet()) {
+		this.writeMap(mdcPropertyMap, gen);
+	}
+
+	private void writeMap(Map<String, String> map, JsonGenerator gen) throws IOException {
+		for (Map.Entry<String, String> entry : map.entrySet()) {
 			gen.writeStringField(entry.getKey(), entry.getValue());
 		}
 	}
