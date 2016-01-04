@@ -9,6 +9,8 @@ import com.internetitem.logback.elasticsearch.config.Settings;
 import com.internetitem.logback.elasticsearch.util.AbstractPropertyAndEncoder;
 import com.internetitem.logback.elasticsearch.util.ClassicPropertyAndEncoder;
 import com.internetitem.logback.elasticsearch.util.ErrorReporter;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 
 import java.io.IOException;
 
@@ -25,7 +27,7 @@ public class ClassicElasticsearchPublisher extends AbstractElasticsearchPublishe
 
 	@Override
 	protected void serializeCommonFields(JsonGenerator gen, ILoggingEvent event) throws IOException {
-		gen.writeObjectField("@timestamp", getTimestamp(event.getTimeStamp()));
-		gen.writeObjectField("message", event.getFormattedMessage());
+		gen.writeObjectField("@timestamp", new DateTime(event.getTimeStamp()).toDateTime(DateTimeZone.UTC).toString());
+		gen.writeObjectField("@message", event.getFormattedMessage());
 	}
 }

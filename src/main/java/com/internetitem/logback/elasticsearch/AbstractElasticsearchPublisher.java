@@ -1,5 +1,6 @@
 package com.internetitem.logback.elasticsearch;
 
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.Context;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
@@ -17,12 +18,13 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public abstract class AbstractElasticsearchPublisher<T> implements Runnable {
 
 	private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(1);
-
+	private static final String MDC_PROPERTY_NAME = "mdc";
 	public static final String THREAD_NAME_PREFIX = "es-writer-";
 
 	private volatile List<T> events;
@@ -176,13 +178,27 @@ public abstract class AbstractElasticsearchPublisher<T> implements Runnable {
 		serializeCommonFields(gen, event);
 
 		for (AbstractPropertyAndEncoder<T> pae : propertyList) {
-			String value = pae.encode(event);
-			if (pae.allowEmpty() || (value != null && !value.isEmpty())) {
-				gen.writeObjectField(pae.getName(), value);
+			String name = pae.getName();
+
+			if (MDC_PROPERTY_NAME.equalsIgnoreCase(name)) {
+				this.splitMDCFields(event, gen);
+			} else {
+				String value = pae.encode(event);
+				if (pae.allowEmpty() || (value != null && !value.isEmpty())) {
+					gen.writeObjectField(pae.getName(), value);
+				}
 			}
 		}
 
 		gen.writeEndObject();
+	}
+
+	private void splitMDCFields(T event, JsonGenerator gen) throws IOException {
+		ILoggingEvent logEvent = (ILoggingEvent) event;
+		Map<String, String> mdcPropertyMap = logEvent.getMDCPropertyMap();
+		for (Map.Entry<String, String> entry : mdcPropertyMap.entrySet()) {
+			gen.writeStringField(entry.getKey(), entry.getValue());
+		}
 	}
 
 	protected abstract void serializeCommonFields(JsonGenerator gen, T event) throws IOException;
